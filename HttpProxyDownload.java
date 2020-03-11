@@ -374,8 +374,7 @@ class ConnectionViaProxy {
         socket = s;
 
 
-
-
+        
         /** Creating HTTP request message for the appropiate HTTP method according to the content required or
         * need to be send.
         */
