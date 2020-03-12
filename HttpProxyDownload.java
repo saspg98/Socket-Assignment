@@ -1,12 +1,15 @@
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
-
-import java.net.*;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.net.URL;
+import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
 
 /** Class to download content from website using proxy server.
  * Uses Class ConnectionViaProxy to connect to the proxy server and download content.
@@ -22,6 +25,8 @@ class HttpProxyDownload {
 
     // Variable to store url of the webpage
     private static String webpageURL = null;
+    // Variable to store url of the webpage logo
+    private static String imageRelativeUrl = null;
     // Variable to store the proxy server IP address
     private static String proxyServerIP = null;
     // Variable to store the port on the proxy server
@@ -40,6 +45,7 @@ class HttpProxyDownload {
 
         // Setting input parameters to download html and logo of the website via proxy
         webpageURL = args[0];
+        imageRelativeUrl=null;
         proxyServerIP = args[1];
         proxyPort = Integer.parseInt(args[2]);
         proxyServerUsername = args[3];
@@ -55,7 +61,9 @@ class HttpProxyDownload {
                     proxyServerPassword);
 
         } catch (IOException e) {
+            System.err.println("\nIO problem in Class ConnectionViaProxy\n");
             e.printStackTrace();
+            System.exit(1);
         }
 
         // GET request to download html of the website given and save as index.html.
@@ -69,15 +77,20 @@ class HttpProxyDownload {
             e.printStackTrace();
         }
 
-        // GET request to download logo of the website given and save as logo.png.
-        // cViaProxy.setRequestMethod("GET");
-        // try (InputStream in = cViaProxy.getInputStream()){
-        //     System.out.println("\nHere is the response for your request .....\n");
-        //     downloadWebpage(in,logoFilename);
-        
-        // }catch(IOException e){
-        //     System.err.println("\nUnable to fetch the response from the website!! :(\n");
-        //     e.printStackTrace();
+        // if(imageRelativeUrl != null){
+        //     // GET request to download logo of the website given and save as logo.png.
+        //     // cViaProxy.setRequestMethod("GET");
+        //     // cViaProxy.updateUrl(imageRelativeUrl);
+        //     // try (InputStream in = cViaProxy.getInputStream()){
+        //     //     System.out.println("\nHere is the response for your request .....\n");
+        //     //     downloadWebpage(in,logoFilename);
+            
+        //     // }catch(IOException e){
+        //     //     System.err.println("\nUnable to fetch the response from the website!! :(\n");
+        //     //     e.printStackTrace();
+        //     // }
+        // }else{
+        //     System.out.println("\nUnable to fetch logo of the website !! :(");
         // }
 
         //Disconnecting socket connection to proxy server.
@@ -125,11 +138,17 @@ class HttpProxyDownload {
             // Webpage HTML download successful
             System.out.println("Wepage HTML downloaded successfully. !!");
 
-        } catch (IOException e) {
-            System.err.println("IOException raised while downloading webpage. !!");
+        } catch(SocketTimeoutException e){
+            System.err.println("\nTimeout while reading from Socket input buffer.\n");
+            e.printStackTrace();
 
-        } catch (Exception e) {
-            System.err.println("FileNotFoundException Raised");
+        } catch (IOException e) {
+            System.err.println("\nIOException raised while downloading webpage. !!\n");
+            e.printStackTrace();
+
+        }catch (Exception e) {
+            System.err.println("\nFileNotFoundException Raised\n");
+            e.printStackTrace();
 
         } finally {
 
@@ -139,7 +158,8 @@ class HttpProxyDownload {
                 writer.close();
 
             } catch (IOException e) {
-                System.err.println("IOException Raised in finally");
+                System.err.println("\nIOException Raised in finally\n");
+                e.printStackTrace();
             }
         }
     }
@@ -167,14 +187,17 @@ class HttpProxyDownload {
             // Webpage logo download successful
             System.out.println("Wepage logo downloaded successfully. !!");
 
-        } catch (MalformedURLException e) {
-            System.err.println("Malformed URL Exception raised. !!");
-
+        } catch(SocketTimeoutException e){
+            System.err.println("\nTimeout while reading from Socket input buffer.\n");
+            e.printStackTrace();
+ 
         } catch (IOException e) {
-            System.err.println("IOException raised while downloading logo. !!");
+            System.err.println("\nIOException raised while downloading logo. !!\n");
+            e.printStackTrace();
 
         } catch (Exception e) {
-            System.err.println("FileNotFoundException Raised");
+            System.err.println("\nFileNotFoundException Raised\n");
+            e.printStackTrace();
 
         } finally {
 
@@ -184,7 +207,8 @@ class HttpProxyDownload {
                 outputStream.close();
 
             } catch (IOException e) {
-                System.err.println("IOException Raised in finally");
+                System.err.println("\nIOException Raised in finally.\n");
+                e.printStackTrace();
             }
         }
     }
@@ -202,6 +226,7 @@ class ConnectionViaProxy {
 
     private String proxyHost;
     private int proxyPort;
+    private String baseURL; 
     private URL url;
     private String method;
     private Map<String, List<String>> sendheaders = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -219,7 +244,8 @@ class ConnectionViaProxy {
         String encoded = Base64.getUrlEncoder().encodeToString((username + ":" + password).getBytes()).replace("\r\n",
                 "");
         proxyheaders.put("Proxy-Authorization", new ArrayList<>(Arrays.asList("Basic " + encoded)));
-        this.url = new URL("https://"+ url + "/");
+        baseURL = "https://"+ url + "/";
+        this.url = new URL(baseURL);
 
     }
 
@@ -253,8 +279,15 @@ class ConnectionViaProxy {
         try{
             socket.setSoTimeout(60000);;
             socket.connect(new InetSocketAddress(proxyHost, proxyPort));
-        }catch(Exception e){
+        }catch(SocketTimeoutException e){
+            System.err.println("\nTimeout while connecting to proxy server while initial setup.\n");
             e.printStackTrace();
+            System.exit(1);
+        }
+        catch(Exception e){
+            System.err.println("\nError while configuring socket.\n");
+            e.printStackTrace();
+            System.exit(1);
         }
 
 
@@ -293,10 +326,14 @@ class ConnectionViaProxy {
         * Required for authentication of our device with the proxy server.
         */
         System.out.println("\nSending HTTP CONNECT request to the proxy. Fetching response .....");
-        socket.getOutputStream().write(bytes);
-        socket.getOutputStream().flush();
-
-
+        try{
+            socket.getOutputStream().write(bytes);
+            socket.getOutputStream().flush();
+        }catch(SocketTimeoutException e){
+            System.err.println("\nTimeout while writing to Socket output buffer for HTTP CONNECT.\n");
+            e.printStackTrace();
+            System.exit(1);
+        }
 
         /** Parsing the response for CONNECT request to the proxy server
          * Following things to be verified or noted down after successfull connection between our device 
@@ -346,7 +383,6 @@ class ConnectionViaProxy {
         }
 
 
-
         // In case none of HTTP/1.0 200 and HTTP/1.1 200 is returned as a header in response exception is thrown.
         // Some proxies return http/1.1, some http/1.0 even we asked for 1.0
         if (!replyStr.startsWith("HTTP/1.0 200") && !replyStr.startsWith("HTTP/1.1 200")) {
@@ -361,7 +397,6 @@ class ConnectionViaProxy {
         System.out.println("\nConstructing request message......\n");
  
 
-
         /** Handshake between proxy server and our device to create a secure channel in between the two.
          * SSLSocketFactory is required for the same. Evidence of SSL handshake can be seen in 
          * traffic_proxy.pcapng and traffic_proxy2.pcapng, collected while connecting to proxy via website.
@@ -374,7 +409,6 @@ class ConnectionViaProxy {
         socket = s;
 
 
-        
         /** Creating HTTP request message for the appropiate HTTP method according to the content required or
         * need to be send.
         */
@@ -406,12 +440,16 @@ class ConnectionViaProxy {
         }
 
 
-
         //Sending HTTP request message through socket to the website server.
         System.out.println("\nSending "+ this.method + " request to the proxy!!");
-        socket.getOutputStream().write(bytes);
-        socket.getOutputStream().flush();
+        try{
+            socket.getOutputStream().write(bytes);
+            socket.getOutputStream().flush();
 
+        }catch(SocketTimeoutException e){
+            System.err.println("\nTimeout while writing to Socket output buffer while HTTP "+this.method+" request.\n");
+            e.printStackTrace();
+        }
     }
 
 
@@ -420,7 +458,21 @@ class ConnectionViaProxy {
         try {
             socket.close();
         } catch (IOException ex) {
+            System.err.println("\nError while closing socket.\n");
             Logger.getLogger(ConnectionViaProxy.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+
+    //Method to change the url in order to fetch the image
+    //Base url remains equal to the url of webpage 
+    public void updateUrl(String relativeUrl) throws MalformedURLException {
+        try {
+            this.url = new URL(this.baseURL + relativeUrl);
+        } catch (MalformedURLException e) {
+            System.out.println("\nIssue in relative URL "+relativeUrl+"\n");
+            e.printStackTrace();
+            throw new MalformedURLException("\nIssue in relative URL.\n");
         }
     }
 
